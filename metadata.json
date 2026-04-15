@@ -1,0 +1,6 @@
+{
+  "name": "BiteDash",
+  "description": "A complete 3-tier food delivery application with real-time tracking, restaurant management, and a production-grade DevOps/DevSecOps pipeline including CI/CD, security scanning, and Kubernetes deployment.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

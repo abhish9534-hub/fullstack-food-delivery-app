@@ -1,0 +1,16 @@
+# Prometheus Helm Chart Values
+alertmanager:
+  enabled: true
+  persistence:
+    size: 10Gi
+
+server:
+  persistence:
+    size: 50Gi
+  retention: 15d
+
+nodeExporter:
+  enabled: true
+
+pushgateway:
+  enabled: false

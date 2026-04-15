@@ -1,0 +1,156 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - displayName: string (optional)
+    //   - photoURL: string (optional, URL)
+    //   - role: string (required, enum: ['admin', 'customer'])
+    //   - address: string (optional)
+    //   - phone: string (optional)
+    //
+    // Collection: restaurants
+    // Document ID: {restaurantId}
+    // Fields:
+    //   - id: string
+    //   - name: string (required)
+    //   - description: string
+    //   - image: string (required, URL)
+    //   - rating: number
+    //   - deliveryTime: string
+    //   - categories: list<string>
+    //   - address: string
+    //   - ownerId: string (required)
+    //
+    // Collection: restaurants/{restaurantId}/menuItems
+    // Document ID: {menuItemId}
+    // Fields:
+    //   - id: string
+    //   - restaurantId: string
+    //   - name: string (required)
+    //   - description: string
+    //   - price: number (required, positive)
+    //   - image: string
+    //   - category: string
+    //   - isAvailable: bool
+    //
+    // Collection: orders
+    // Document ID: {orderId}
+    // Fields:
+    //   - id: string
+    //   - customerId: string (required)
+    //   - restaurantId: string (required)
+    //   - restaurantName: string
+    //   - items: list<map> (required)
+    //   - totalAmount: number (required, positive)
+    //   - status: string (required, enum: ['pending', 'preparing', 'out-for-delivery', 'delivered'])
+    //   - createdAt: string (ISO 8601)
+    //   - updatedAt: string (ISO 8601)
+    //   - deliveryAddress: string
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "abhish9534@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'customer'] &&
+             (!('photoURL' in data) || isValidUrl(data.photoURL));
+    }
+
+    function isValidRestaurant(data) {
+      return data.keys().hasAll(['name', 'image', 'ownerId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidUrl(data.image) &&
+             data.ownerId is string;
+    }
+
+    function isValidMenuItem(data) {
+      return data.keys().hasAll(['restaurantId', 'name', 'price']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.price is number && data.price > 0;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['customerId', 'restaurantId', 'items', 'totalAmount', 'status']) &&
+             data.customerId == request.auth.uid &&
+             data.items is list && data.items.size() > 0 &&
+             data.totalAmount is number && data.totalAmount > 0 &&
+             data.status in ['pending', 'preparing', 'out-for-delivery', 'delivered'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'customer' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidRestaurant(request.resource.data);
+      allow update: if isAdmin() && isValidRestaurant(request.resource.data);
+      allow delete: if isAdmin();
+
+      match /menuItems/{menuItemId} {
+        allow read: if true;
+        allow create: if isAdmin() && isValidMenuItem(request.resource.data);
+        allow update: if isAdmin() && isValidMenuItem(request.resource.data);
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.customerId || isAdmin());
+      allow create: if isAuthenticated() && isValidOrder(request.resource.data);
+      allow update: if isAuthenticated() && (
+        (request.auth.uid == resource.data.customerId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && resource.data.status == 'pending' && request.resource.data.status == 'cancelled') ||
+        isAdmin()
+      );
+    }
+  }
+}

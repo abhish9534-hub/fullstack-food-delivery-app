@@ -75,8 +75,9 @@ docker build -t ecommerce-backend -f devops/docker/backend.Dockerfile .
 
 ---
 
-## ☸️ Step 4: Kubernetes Deployment (EKS)
+## ☸️ Step 4: Kubernetes Deployment
 
+### Option A: Cloud Deployment (AWS EKS)
 1. **Configure AWS CLI:**
    ```bash
    aws configure
@@ -95,6 +96,15 @@ docker build -t ecommerce-backend -f devops/docker/backend.Dockerfile .
    kubectl apply -f devops/k8s/backend.yaml
    kubectl apply -f devops/k8s/ingress.yaml
    ```
+
+### Option B: Local Deployment (Kind)
+For local testing without cloud costs, use **Kind**.
+1. **Run Automation Script:**
+   ```bash
+   chmod +x scripts/kind-deploy.sh
+   ./scripts/kind-deploy.sh
+   ```
+2. **Detailed Guide:** See `KIND_DEPLOYMENT.md` for manual steps and configuration details.
 
 ---
 
